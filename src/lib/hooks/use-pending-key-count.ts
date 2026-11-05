@@ -21,8 +21,8 @@ export function usePendingKeyCount(): number {
 
   const refresh = useCallback(async () => {
     try {
-      const keys = await apiGet<Pick<AgentKey, 'pending_approval'>[]>('/api/agent-keys');
-      const next = (keys ?? []).filter((k) => k.pending_approval).length;
+      const keys = await apiGet<Pick<AgentKey, 'approval_status'>[]>('/api/agent-keys');
+      const next = (keys ?? []).filter((k) => k.approval_status === 'pending').length;
       setCount(next);
       window.dispatchEvent(new CustomEvent(PENDING_KEY_COUNT_EVENT, { detail: next }));
     } catch {

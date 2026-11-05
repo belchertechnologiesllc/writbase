@@ -135,7 +135,7 @@ const pendingKey = {
   role: 'worker' as const,
   key_prefix: 'wb_pnd',
   is_active: false,
-  pending_approval: true,
+  approval_status: 'pending' as const,
   special_prompt: null,
   created_at: '2025-03-01T00:00:00Z',
   last_used_at: null,
@@ -213,5 +213,25 @@ describe('AgentKeyList pending approvals', () => {
     await waitFor(() => {
       expect(decideMock).toHaveBeenCalledWith('key-3', 'reject');
     });
+  });
+});
+
+describe('AgentKeyList rejected keys', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('shows a Rejected badge and keeps rejected keys out of the approval section', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([{ ...pendingKey, id: 'key-9', name: 'Denied Bot', approval_status: 'rejected' }]),
+    );
+
+    render(<AgentKeyList />);
+
+    expect(await screen.findByText('Rejected')).toBeInTheDocument();
+    expect(screen.getByText('Denied Bot')).toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for approval/)).not.toBeInTheDocument();
   });
 });

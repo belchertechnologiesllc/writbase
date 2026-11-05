@@ -12,7 +12,7 @@ export async function hashSecret(secret: string): Promise<string> {
 }
 
 const KEY_COLUMNS =
-  'id, name, role, key_prefix, is_active, pending_approval, special_prompt, created_at, last_used_at, created_by, project_id, department_id';
+  'id, name, role, key_prefix, is_active, approval_status, special_prompt, created_at, last_used_at, created_by, project_id, department_id';
 
 async function generateKey(
   keyId: string,
@@ -108,8 +108,9 @@ export async function updateAgentKey(
   if (params.specialPrompt !== undefined) updates.special_prompt = params.specialPrompt;
   if (params.isActive !== undefined) {
     updates.is_active = params.isActive;
-    // Switching a key on or off by hand also settles any pending approval.
-    updates.pending_approval = false;
+    // A human switching a key on is an approval. Switching it off is not a
+    // decision, so a pending or rejected key keeps its status.
+    if (params.isActive) updates.approval_status = 'approved';
   }
   if (params.projectId !== undefined) {
     updates.project_id = params.projectId;
@@ -153,7 +154,8 @@ export class KeyNotPendingError extends Error {
 /**
  * Approve or reject a key that an agent created while human approval was
  * required. Only keys still marked pending are changed, so a stale page
- * can't flip a key someone else already decided on.
+ * can't flip a key someone else already decided on. A rejected key stays
+ * rejected: agents can't switch it on, only a human can.
  */
 export async function decideAgentKeyApproval(
   supabase: SupabaseClient,
@@ -163,9 +165,9 @@ export async function decideAgentKeyApproval(
 
   const { data, error } = await supabase
     .from('agent_keys')
-    .update({ pending_approval: false, is_active: approve })
+    .update({ approval_status: approve ? 'approved' : 'rejected', is_active: approve })
     .eq('id', params.id)
-    .eq('pending_approval', true)
+    .eq('approval_status', 'pending')
     .select(KEY_COLUMNS)
     .maybeSingle();
 

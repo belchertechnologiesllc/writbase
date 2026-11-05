@@ -64,7 +64,7 @@ export type Database = {
           key_prefix: string;
           last_used_at: string | null;
           name: string;
-          pending_approval: boolean;
+          approval_status: string;
           project_id: string | null;
           role: Database['public']['Enums']['agent_role'];
           special_prompt: string | null;
@@ -80,7 +80,7 @@ export type Database = {
           key_prefix: string;
           last_used_at?: string | null;
           name: string;
-          pending_approval?: boolean;
+          approval_status?: string;
           project_id?: string | null;
           role?: Database['public']['Enums']['agent_role'];
           special_prompt?: string | null;
@@ -96,7 +96,7 @@ export type Database = {
           key_prefix?: string;
           last_used_at?: string | null;
           name?: string;
-          pending_approval?: boolean;
+          approval_status?: string;
           project_id?: string | null;
           role?: Database['public']['Enums']['agent_role'];
           special_prompt?: string | null;

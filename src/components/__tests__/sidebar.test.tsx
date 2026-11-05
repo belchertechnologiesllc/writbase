@@ -125,9 +125,9 @@ describe('Sidebar pending approval badge', () => {
         '/api/projects': [],
         '/api/departments': [],
         '/api/agent-keys': [
-          { id: 'a', pending_approval: true },
-          { id: 'b', pending_approval: true },
-          { id: 'c', pending_approval: false },
+          { id: 'a', approval_status: 'pending' },
+          { id: 'b', approval_status: 'pending' },
+          { id: 'c', approval_status: 'not_required' },
         ],
       }),
     );
@@ -142,7 +142,7 @@ describe('Sidebar pending approval badge', () => {
     const fetchMock = mockFetch({
       '/api/projects': [],
       '/api/departments': [],
-      '/api/agent-keys': [{ id: 'c', pending_approval: false }],
+      '/api/agent-keys': [{ id: 'c', approval_status: 'not_required' }],
     });
     vi.stubGlobal('fetch', fetchMock);
 

@@ -26,6 +26,8 @@ export function AgentKeyDetailEditor({
   const [name, setName] = useState(initialName);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [isActive, setIsActive] = useState(initialActive);
+  // The on/off value last saved to the server, to tell real changes apart.
+  const [savedActive, setSavedActive] = useState(initialActive);
   const [loading, setLoading] = useState(false);
   const [showRotateConfirm, setShowRotateConfirm] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -62,11 +64,15 @@ export function AgentKeyDetailEditor({
     formData.set('id', keyId);
     formData.set('name', name);
     formData.set('specialPrompt', prompt);
-    formData.set('isActive', String(isActive));
+    // Only send the switch when it changed: saving a name or prompt shouldn't
+    // count as switching the key on or off (which can approve a key).
+    const activeChanged = isActive !== savedActive;
+    if (activeChanged) formData.set('isActive', String(isActive));
 
     const result = await updateAgentKeyAction(formData);
 
     if (result.success) {
+      if (activeChanged) setSavedActive(isActive);
       toast.success('Changes saved');
     } else {
       toast.error(result.error ?? 'Failed to update');

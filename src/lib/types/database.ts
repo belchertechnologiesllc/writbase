@@ -1,6 +1,7 @@
 import type {
   ActorType,
   AgentRole,
+  ApprovalStatus,
   EventCategory,
   Priority,
   Source,
@@ -103,7 +104,7 @@ export interface AgentKey {
   key_hash: string;
   key_prefix: string;
   is_active: boolean;
-  pending_approval: boolean;
+  approval_status: ApprovalStatus;
   special_prompt: string | null;
   created_at: string;
   last_used_at: string | null;

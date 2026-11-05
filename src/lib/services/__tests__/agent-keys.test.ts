@@ -317,10 +317,10 @@ describe('updateAgentKeyPermissions', () => {
   });
 });
 
-describe('updateAgentKey pending approval', () => {
-  it('clears pending_approval when a human switches a key on or off', async () => {
+describe('updateAgentKey approval status', () => {
+  it('marks a key approved when a human switches it on', async () => {
     const mock = createMockSupabase();
-    mock.addResponse({ id: 'k1', is_active: true, pending_approval: false });
+    mock.addResponse({ id: 'k1', is_active: true, approval_status: 'approved' });
     mock.addResponse(null);
 
     await updateAgentKey(mock, {
@@ -331,10 +331,26 @@ describe('updateAgentKey pending approval', () => {
     });
 
     const update = mock.calls.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ is_active: true, pending_approval: false });
+    expect(update?.args[0]).toEqual({ is_active: true, approval_status: 'approved' });
   });
 
-  it('leaves pending_approval alone when only the name changes', async () => {
+  it('keeps the approval status when a human switches a key off', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse({ id: 'k1', is_active: false });
+    mock.addResponse(null);
+
+    await updateAgentKey(mock, {
+      id: 'k1',
+      isActive: false,
+      actorId: 'user-1',
+      workspaceId: 'ws-test-1',
+    });
+
+    const update = mock.calls.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ is_active: false });
+  });
+
+  it('leaves the approval status alone when only the name changes', async () => {
     const mock = createMockSupabase();
     mock.addResponse({ id: 'k1', name: 'Renamed' });
     mock.addResponse(null);
@@ -352,9 +368,9 @@ describe('updateAgentKey pending approval', () => {
 });
 
 describe('decideAgentKeyApproval', () => {
-  it('approves a pending key: activates it, clears pending, logs agent_key.approved', async () => {
+  it('approves a pending key: activates it, marks it approved, logs agent_key.approved', async () => {
     const mock = createMockSupabase();
-    const approved = { id: 'k1', is_active: true, pending_approval: false };
+    const approved = { id: 'k1', is_active: true, approval_status: 'approved' };
     mock.addResponse(approved);
     mock.addResponse(null);
 
@@ -367,20 +383,20 @@ describe('decideAgentKeyApproval', () => {
 
     expect(result).toEqual(approved);
     const update = mock.calls.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ pending_approval: false, is_active: true });
+    expect(update?.args[0]).toEqual({ approval_status: 'approved', is_active: true });
     // Only touches keys that are still pending
     expect(
       mock.calls.some(
-        (c) => c.method === 'eq' && c.args[0] === 'pending_approval' && c.args[1] === true,
+        (c) => c.method === 'eq' && c.args[0] === 'approval_status' && c.args[1] === 'pending',
       ),
     ).toBe(true);
     const insert = mock.calls.find((c) => c.method === 'insert');
     expect((insert?.args[0] as { event_type: string }).event_type).toBe('agent_key.approved');
   });
 
-  it('rejects a pending key: keeps it off, clears pending, logs agent_key.rejected', async () => {
+  it('rejects a pending key: keeps it off, marks it rejected, logs agent_key.rejected', async () => {
     const mock = createMockSupabase();
-    mock.addResponse({ id: 'k1', is_active: false, pending_approval: false });
+    mock.addResponse({ id: 'k1', is_active: false, approval_status: 'rejected' });
     mock.addResponse(null);
 
     await decideAgentKeyApproval(mock, {
@@ -391,7 +407,7 @@ describe('decideAgentKeyApproval', () => {
     });
 
     const update = mock.calls.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ pending_approval: false, is_active: false });
+    expect(update?.args[0]).toEqual({ approval_status: 'rejected', is_active: false });
     const insert = mock.calls.find((c) => c.method === 'insert');
     expect((insert?.args[0] as { event_type: string }).event_type).toBe('agent_key.rejected');
   });

@@ -16,7 +16,8 @@ import { formatRelativeTime } from '@/lib/utils/format';
 type KeyRow = Omit<AgentKey, 'key_hash'>;
 
 function StatusBadge({ keyRow }: { keyRow: KeyRow }) {
-  if (keyRow.pending_approval) return <Badge color="yellow">Pending</Badge>;
+  if (keyRow.approval_status === 'pending') return <Badge color="yellow">Pending</Badge>;
+  if (keyRow.approval_status === 'rejected') return <Badge color="red">Rejected</Badge>;
   return (
     <Badge color={keyRow.is_active ? 'green' : 'red'}>
       {keyRow.is_active ? 'Active' : 'Inactive'}
@@ -146,7 +147,7 @@ export function AgentKeyList() {
     }
   }
 
-  const pendingKeys = keys.filter((k) => k.pending_approval);
+  const pendingKeys = keys.filter((k) => k.approval_status === 'pending');
 
   return (
     <>

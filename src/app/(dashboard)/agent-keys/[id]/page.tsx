@@ -19,7 +19,7 @@ export default async function AgentKeyDetailPage({ params }: PageProps) {
   const { data, error } = await supabase
     .from('agent_keys')
     .select(
-      'id, name, role, key_prefix, is_active, pending_approval, special_prompt, created_at, last_used_at, created_by',
+      'id, name, role, key_prefix, is_active, approval_status, special_prompt, created_at, last_used_at, created_by',
     )
     .eq('id', id)
     .single();
@@ -35,7 +35,7 @@ export default async function AgentKeyDetailPage({ params }: PageProps) {
     | 'role'
     | 'key_prefix'
     | 'is_active'
-    | 'pending_approval'
+    | 'approval_status'
     | 'special_prompt'
     | 'created_at'
     | 'last_used_at'
@@ -66,21 +66,29 @@ export default async function AgentKeyDetailPage({ params }: PageProps) {
                 {key.key_prefix}...
               </code>
               <Badge color={key.role === 'manager' ? 'purple' : 'blue'}>{key.role}</Badge>
-              {key.pending_approval ? (
+              {key.approval_status === 'pending' ? (
                 <Badge color="yellow">Pending approval</Badge>
+              ) : key.approval_status === 'rejected' ? (
+                <Badge color="red">Rejected</Badge>
               ) : (
                 <Badge color={key.is_active ? 'green' : 'red'}>
                   {key.is_active ? 'Active' : 'Inactive'}
                 </Badge>
               )}
             </div>
-            {key.pending_approval && (
+            {key.approval_status === 'pending' && (
               <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
                 An agent created this key. Approve or reject it from the{' '}
                 <Link href="/agent-keys" className="underline">
                   Agent Keys
                 </Link>{' '}
                 page, or switch it on below.
+              </p>
+            )}
+            {key.approval_status === 'rejected' && (
+              <p className="mt-3 text-sm text-red-700 dark:text-red-300">
+                This key was rejected, so agents can&apos;t switch it on. Switching it on below
+                approves it.
               </p>
             )}
           </div>

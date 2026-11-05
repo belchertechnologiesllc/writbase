@@ -11,6 +11,9 @@ export async function hashSecret(secret: string): Promise<string> {
     .join('');
 }
 
+const KEY_COLUMNS =
+  'id, name, role, key_prefix, is_active, pending_approval, special_prompt, created_at, last_used_at, created_by, project_id, department_id';
+
 async function generateKey(
   keyId: string,
 ): Promise<{ fullKey: string; prefix: string; hash: string }> {
@@ -30,9 +33,7 @@ export async function listAgentKeys(
 ): Promise<Omit<AgentKey, 'key_hash'>[]> {
   const { data, error } = await supabase
     .from('agent_keys')
-    .select(
-      'id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, created_by, project_id, department_id',
-    )
+    .select(KEY_COLUMNS)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -68,9 +69,7 @@ export async function createAgentKey(
       project_id: params.projectId ?? null,
       department_id: params.departmentId ?? null,
     })
-    .select(
-      'id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, created_by, project_id, department_id',
-    )
+    .select(KEY_COLUMNS)
     .single();
 
   if (error) throw error;
@@ -107,7 +106,11 @@ export async function updateAgentKey(
   const updates: Record<string, unknown> = {};
   if (params.name !== undefined) updates.name = params.name;
   if (params.specialPrompt !== undefined) updates.special_prompt = params.specialPrompt;
-  if (params.isActive !== undefined) updates.is_active = params.isActive;
+  if (params.isActive !== undefined) {
+    updates.is_active = params.isActive;
+    // Switching a key on or off by hand also settles any pending approval.
+    updates.pending_approval = false;
+  }
   if (params.projectId !== undefined) {
     updates.project_id = params.projectId;
     // Clearing project must also clear department (DB CHECK constraint)
@@ -119,9 +122,7 @@ export async function updateAgentKey(
     .from('agent_keys')
     .update(updates)
     .eq('id', params.id)
-    .select(
-      'id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, created_by, project_id, department_id',
-    )
+    .select(KEY_COLUMNS)
     .single();
 
   if (error) throw error;
@@ -142,6 +143,51 @@ export async function updateAgentKey(
   return updated;
 }
 
+export class KeyNotPendingError extends Error {
+  constructor() {
+    super('This key is no longer waiting for approval.');
+    this.name = 'KeyNotPendingError';
+  }
+}
+
+/**
+ * Approve or reject a key that an agent created while human approval was
+ * required. Only keys still marked pending are changed, so a stale page
+ * can't flip a key someone else already decided on.
+ */
+export async function decideAgentKeyApproval(
+  supabase: SupabaseClient,
+  params: { id: string; decision: 'approve' | 'reject'; actorId: string; workspaceId: string },
+): Promise<Omit<AgentKey, 'key_hash'>> {
+  const approve = params.decision === 'approve';
+
+  const { data, error } = await supabase
+    .from('agent_keys')
+    .update({ pending_approval: false, is_active: approve })
+    .eq('id', params.id)
+    .eq('pending_approval', true)
+    .select(KEY_COLUMNS)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new KeyNotPendingError();
+  const key = data as Omit<AgentKey, 'key_hash'>;
+
+  await logEvent(supabase, {
+    eventCategory: 'admin',
+    targetType: 'agent_key',
+    targetId: params.id,
+    eventType: approve ? 'agent_key.approved' : 'agent_key.rejected',
+    actorType: 'human',
+    actorId: params.actorId,
+    actorLabel: 'admin',
+    source: 'ui',
+    workspaceId: params.workspaceId,
+  });
+
+  return key;
+}
+
 export async function rotateAgentKey(
   supabase: SupabaseClient,
   params: { id: string; actorId: string; workspaceId: string },
@@ -152,9 +198,7 @@ export async function rotateAgentKey(
     .from('agent_keys')
     .update({ key_hash: hash, key_prefix: prefix })
     .eq('id', params.id)
-    .select(
-      'id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, created_by, project_id, department_id',
-    )
+    .select(KEY_COLUMNS)
     .single();
 
   if (error) throw error;

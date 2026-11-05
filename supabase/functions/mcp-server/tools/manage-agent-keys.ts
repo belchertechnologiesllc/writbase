@@ -44,7 +44,7 @@ async function listKeys(ctx: AgentContext, supabase: SupabaseClient, limit = 20,
   const pageLimit = Math.min(limit, 50)
   let query = supabase
     .from('agent_keys')
-    .select('id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, created_by, project_id, department_id')
+    .select('id, name, role, key_prefix, is_active, pending_approval, special_prompt, created_at, last_used_at, created_by, project_id, department_id')
     .eq('workspace_id', ctx.workspaceId)
     .order('created_at', { ascending: false })
     .limit(pageLimit)
@@ -134,6 +134,7 @@ async function createKey(
       key_hash: keyData.keyHash,
       key_prefix: keyData.keyPrefix,
       is_active: isActive,
+      pending_approval: requireApproval,
       special_prompt: params.special_prompt ?? null,
       created_by: ctx.keyId,
       workspace_id: ctx.workspaceId,
@@ -205,12 +206,36 @@ async function updateKey(
     return mcpError(validationError({ _: 'No fields to update. Provide name, special_prompt, is_active, project_id, or department_id.' }))
   }
 
+  // Agents can't approve keys: a key waiting for human approval stays off
+  // until someone approves it in the dashboard.
+  if (params.is_active === true) {
+    const { data: target, error: targetError } = await supabase
+      .from('agent_keys')
+      .select('pending_approval')
+      .eq('id', params.key_id)
+      .eq('workspace_id', ctx.workspaceId)
+      .abortSignal(AbortSignal.timeout(10_000))
+      .maybeSingle()
+
+    if (targetError) {
+      return mcpError({ code: 'internal_error', message: targetError.message })
+    }
+
+    if (target?.pending_approval) {
+      return mcpError({
+        code: 'validation_error',
+        message: 'This key is waiting for human approval and cannot be activated by an agent.',
+        recovery: 'Ask a human admin to approve it on the Agent Keys page in the dashboard.',
+      })
+    }
+  }
+
   const { data, error } = await supabase
     .from('agent_keys')
     .update(updates)
     .eq('id', params.key_id)
     .eq('workspace_id', ctx.workspaceId)
-    .select('id, name, role, key_prefix, is_active, special_prompt, created_at, last_used_at, project_id, department_id')
+    .select('id, name, role, key_prefix, is_active, pending_approval, special_prompt, created_at, last_used_at, project_id, department_id')
     .abortSignal(AbortSignal.timeout(10_000))
     .single()
 

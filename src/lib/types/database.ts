@@ -103,6 +103,7 @@ export interface AgentKey {
   key_hash: string;
   key_prefix: string;
   is_active: boolean;
+  pending_approval: boolean;
   special_prompt: string | null;
   created_at: string;
   last_used_at: string | null;

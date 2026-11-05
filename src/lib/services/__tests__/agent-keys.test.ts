@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAgentKey,
+  decideAgentKeyApproval,
   getAgentKeyPermissions,
   hashSecret,
+  KeyNotPendingError,
   listAgentKeys,
   rotateAgentKey,
   updateAgentKey,
@@ -312,5 +314,114 @@ describe('updateAgentKeyPermissions', () => {
         workspaceId: 'ws-test-1',
       }),
     ).rejects.toThrow('Cannot update permissions on an inactive key');
+  });
+});
+
+describe('updateAgentKey pending approval', () => {
+  it('clears pending_approval when a human switches a key on or off', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse({ id: 'k1', is_active: true, pending_approval: false });
+    mock.addResponse(null);
+
+    await updateAgentKey(mock, {
+      id: 'k1',
+      isActive: true,
+      actorId: 'user-1',
+      workspaceId: 'ws-test-1',
+    });
+
+    const update = mock.calls.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ is_active: true, pending_approval: false });
+  });
+
+  it('leaves pending_approval alone when only the name changes', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse({ id: 'k1', name: 'Renamed' });
+    mock.addResponse(null);
+
+    await updateAgentKey(mock, {
+      id: 'k1',
+      name: 'Renamed',
+      actorId: 'user-1',
+      workspaceId: 'ws-test-1',
+    });
+
+    const update = mock.calls.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ name: 'Renamed' });
+  });
+});
+
+describe('decideAgentKeyApproval', () => {
+  it('approves a pending key: activates it, clears pending, logs agent_key.approved', async () => {
+    const mock = createMockSupabase();
+    const approved = { id: 'k1', is_active: true, pending_approval: false };
+    mock.addResponse(approved);
+    mock.addResponse(null);
+
+    const result = await decideAgentKeyApproval(mock, {
+      id: 'k1',
+      decision: 'approve',
+      actorId: 'user-1',
+      workspaceId: 'ws-test-1',
+    });
+
+    expect(result).toEqual(approved);
+    const update = mock.calls.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ pending_approval: false, is_active: true });
+    // Only touches keys that are still pending
+    expect(
+      mock.calls.some(
+        (c) => c.method === 'eq' && c.args[0] === 'pending_approval' && c.args[1] === true,
+      ),
+    ).toBe(true);
+    const insert = mock.calls.find((c) => c.method === 'insert');
+    expect((insert?.args[0] as { event_type: string }).event_type).toBe('agent_key.approved');
+  });
+
+  it('rejects a pending key: keeps it off, clears pending, logs agent_key.rejected', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse({ id: 'k1', is_active: false, pending_approval: false });
+    mock.addResponse(null);
+
+    await decideAgentKeyApproval(mock, {
+      id: 'k1',
+      decision: 'reject',
+      actorId: 'user-1',
+      workspaceId: 'ws-test-1',
+    });
+
+    const update = mock.calls.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ pending_approval: false, is_active: false });
+    const insert = mock.calls.find((c) => c.method === 'insert');
+    expect((insert?.args[0] as { event_type: string }).event_type).toBe('agent_key.rejected');
+  });
+
+  it('throws KeyNotPendingError when the key was already decided', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse(null);
+
+    await expect(
+      decideAgentKeyApproval(mock, {
+        id: 'k1',
+        decision: 'approve',
+        actorId: 'user-1',
+        workspaceId: 'ws-test-1',
+      }),
+    ).rejects.toBeInstanceOf(KeyNotPendingError);
+    expect(mock.calls.some((c) => c.method === 'insert')).toBe(false);
+  });
+
+  it('throws on update error', async () => {
+    const mock = createMockSupabase();
+    mock.addResponse(null, { message: 'db down' });
+
+    await expect(
+      decideAgentKeyApproval(mock, {
+        id: 'k1',
+        decision: 'reject',
+        actorId: 'user-1',
+        workspaceId: 'ws-test-1',
+      }),
+    ).rejects.toBeTruthy();
   });
 });

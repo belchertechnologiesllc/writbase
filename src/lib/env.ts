@@ -6,7 +6,13 @@ const envSchema = z.object({
 });
 
 function validateEnv() {
-  const result = envSchema.safeParse(process.env);
+  // Name each variable explicitly: Next.js only inlines NEXT_PUBLIC_* values
+  // into browser code when they're written as process.env.NAME, so passing
+  // the whole process.env object leaves them undefined in the browser.
+  const result = envSchema.safeParse({
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  });
   if (!result.success) {
     const formatted = result.error.issues
       .map((i) => `  ${i.path.join('.')}: ${i.message}`)

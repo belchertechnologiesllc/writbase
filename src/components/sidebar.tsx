@@ -10,6 +10,7 @@ import { SidebarDepartmentSelector } from '@/components/sidebar-department-selec
 import { SidebarModals } from '@/components/sidebar-modals';
 import { SidebarProjectSelector } from '@/components/sidebar-project-selector';
 import { Button } from '@/components/ui/button';
+import { usePendingKeyCount } from '@/lib/hooks/use-pending-key-count';
 import { createClient } from '@/lib/supabase/client';
 import type { Department, Project } from '@/lib/types/database';
 import { apiGet } from '@/lib/utils/api-client';
@@ -29,6 +30,7 @@ export function Sidebar({ userEmail, workspaceName }: SidebarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pendingKeyCount = usePendingKeyCount();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -188,13 +190,22 @@ export function Sidebar({ userEmail, workspaceName }: SidebarProps) {
               onClick={() => {
                 setMobileOpen(false);
               }}
-              className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-slate-800 text-white'
                   : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
             >
-              {link.label}
+              <span>{link.label}</span>
+              {link.href === '/agent-keys' && pendingKeyCount > 0 && (
+                <span
+                  className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-slate-900"
+                  title={`${pendingKeyCount} key${pendingKeyCount === 1 ? '' : 's'} waiting for approval`}
+                >
+                  {pendingKeyCount}
+                  <span className="sr-only"> waiting for approval</span>
+                </span>
+              )}
             </Link>
           );
         })}

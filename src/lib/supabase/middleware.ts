@@ -56,6 +56,11 @@ export async function updateSession(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   supabaseResponse.headers.set('x-nonce', nonce);
 
+  // Allow the browser to reach the configured Supabase instance, which may be
+  // local or self-hosted rather than *.supabase.co.
+  const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
+  const supabaseWsOrigin = `${supabaseUrl.protocol === 'https:' ? 'wss:' : 'ws:'}//${supabaseUrl.host}`;
+
   // Set nonce-based CSP (script-src uses nonce, style-src keeps unsafe-inline for Sonner)
   const csp = [
     "default-src 'self'",
@@ -63,7 +68,7 @@ export async function updateSession(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    "connect-src 'self' https://*.supabase.co",
+    `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${supabaseUrl.origin} ${supabaseWsOrigin}`,
     "worker-src 'self'",
   ].join('; ');
 

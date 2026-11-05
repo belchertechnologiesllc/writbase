@@ -111,3 +111,49 @@ describe('Sidebar', () => {
     });
   });
 });
+
+describe('Sidebar pending approval badge', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('shows how many keys are waiting for approval', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch({
+        '/api/projects': [],
+        '/api/departments': [],
+        '/api/agent-keys': [
+          { id: 'a', approval_status: 'pending' },
+          { id: 'b', approval_status: 'pending' },
+          { id: 'c', approval_status: 'not_required' },
+        ],
+      }),
+    );
+
+    render(<Sidebar />);
+
+    expect(await screen.findByTitle('2 keys waiting for approval')).toHaveTextContent('2');
+    expect(screen.getByText('Agent Keys').closest('a')).toHaveAttribute('href', '/agent-keys');
+  });
+
+  it('shows no badge when nothing is pending', async () => {
+    const fetchMock = mockFetch({
+      '/api/projects': [],
+      '/api/departments': [],
+      '/api/agent-keys': [{ id: 'c', approval_status: 'not_required' }],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Sidebar />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/agent-keys'),
+        expect.anything(),
+      );
+    });
+    expect(screen.queryByTitle(/waiting for approval/)).not.toBeInTheDocument();
+  });
+});

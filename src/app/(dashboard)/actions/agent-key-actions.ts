@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import {
   createAgentKey,
+  decideAgentKeyApproval,
+  KeyNotPendingError,
   rotateAgentKey,
   updateAgentKey,
   updateAgentKeyPermissions,
@@ -106,6 +108,41 @@ export async function updateAgentKeyAction(formData: FormData) {
     revalidatePath('/agent-keys');
     return { success: true, data: key };
   } catch (err) {
+    console.error('agent-key action error:', err);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
+export async function decideAgentKeyApprovalAction(keyId: string, decision: 'approve' | 'reject') {
+  try {
+    // Server actions can be called with any value, so check at runtime too.
+    if (!['approve', 'reject'].includes(decision)) {
+      return { success: false, error: 'Invalid decision' };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const workspace = await getWorkspaceForUser(supabase);
+    const key = await decideAgentKeyApproval(supabase, {
+      id: keyId,
+      decision,
+      actorId: user.id,
+      workspaceId: workspace.id,
+    });
+
+    revalidatePath('/agent-keys');
+    return { success: true, data: key };
+  } catch (err) {
+    if (err instanceof KeyNotPendingError) {
+      return { success: false, error: err.message };
+    }
     console.error('agent-key action error:', err);
     return { success: false, error: 'An unexpected error occurred' };
   }

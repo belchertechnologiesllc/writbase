@@ -5,3 +5,4 @@ export type Source = 'ui' | 'mcp' | 'api' | 'system';
 export type EventCategory = 'task' | 'admin' | 'system';
 export type TargetType = 'task' | 'agent_key' | 'project' | 'department';
 export type AgentRole = 'worker' | 'manager';
+export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected';
